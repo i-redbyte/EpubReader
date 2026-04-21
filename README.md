@@ -193,8 +193,21 @@ spine («Глава 1», «Глава 2» и т.д.).
 
 ### 3.3 Артефакт APK
 
+**Локально** (после команд из п. 3.2):
+
 - Debug: `app/build/outputs/apk/debug/app-debug.apk`
 - Release: `app/build/outputs/apk/release/app-release.apk`
+
+**GitHub Actions.** В репозитории настроен workflow `.github/workflows/build-apk.yml` (**Build APK**).
+Он запускается при push в ветки `main` или `master`, при открытии pull request, при push тега вида
+`v*` (например `v1.0.0`), а также вручную: **Actions → Build APK → Run workflow**. В логе успешного
+запуска внизу страницы в секции **Artifacts** доступен архив `epubreader-debug` с файлом
+`app-debug.apk` внутри.
+
+После успешной сборки с **main** или **master** тот же debug APK публикуется в разделе
+**Releases** как pre-release **Latest APK (main)** (тег `epubreader-latest`, при каждом новом push
+файл в релизе обновляется). Отдельно: при push тега `v*` создаётся обычный **Release** по версии с
+тем же APK и автогенерацией заметок.
 
 APK, собранный из чистого состояния ветки без посторонних правок, соответствует коду при тех же
 подписи и зависимостях.
