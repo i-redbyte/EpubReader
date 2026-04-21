@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">EpubReader</string>
+
+    <string name="nav_route_reader">reader</string>
+
+    <string name="action_toc">Оглавление</string>
+    <string name="action_prev">Назад</string>
+    <string name="action_next">Вперёд</string>
+    <string name="cd_prev_chapter">Предыдущая страница</string>
+    <string name="cd_next_chapter">Следующая страница</string>
+    <string name="action_retry">Повторить</string>
+
+    <string name="error_generic">Ошибка: %1$s</string>
+    <string name="error_unknown">Не удалось выполнить операцию. Попробуйте ещё раз.</string>
+    <string name="error_opf_dir">Не удалось определить каталог книги (OPF).</string>
+    <string name="error_open_book">Не удалось открыть книгу.</string>
+    <string name="error_file_not_found">Файл не найден.</string>
+    <string name="error_zip">Архив книги повреждён или не является EPUB.</string>
+    <string name="error_io">Ошибка чтения или записи файла.</string>
+    <string name="error_position_save">Не удалось сохранить позицию чтения.</string>
+
+    <string name="book_default_title">Книга</string>
+    <string name="toc_cover_title">Обложка</string>
+    <string name="toc_chapter_format">Глава %1$d</string>
+
+    <string name="reader_factory_missing">Не задана фабрика экрана чтения. Перезапустите приложение.</string>
+
+    <string name="reader_swipe_navigation">Свайп</string>
+    <string name="cd_reader_swipe_navigation">Перелистывание свайпами у краёв экрана</string>
+</resources>
