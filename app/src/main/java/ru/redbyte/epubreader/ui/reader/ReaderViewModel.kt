@@ -19,6 +19,7 @@ import ru.redbyte.epubreader.domain.ReadingPosition
 import ru.redbyte.epubreader.domain.TocEntry
 import ru.redbyte.epubreader.domain.repository.EpubBookRepository
 import ru.redbyte.epubreader.domain.repository.ReadingPositionRepository
+import ru.redbyte.epubreader.logging.AppFileLogger
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.util.zip.ZipException
@@ -35,10 +36,13 @@ sealed interface ReaderUiState {
     ) : ReaderUiState
 }
 
+private const val TAG = "__ReaderViewModel"
+
 class ReaderViewModel(
     private val application: Application,
     private val epubBookRepository: EpubBookRepository,
     private val readingPositionRepository: ReadingPositionRepository,
+    private val appFileLogger: AppFileLogger,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ReaderUiState>(ReaderUiState.Loading)
@@ -53,13 +57,24 @@ class ReaderViewModel(
 
     fun loadBook() {
         viewModelScope.launch {
+            appFileLogger.i(TAG, "loadBook started")
             _uiState.value = ReaderUiState.Loading
             val result = epubBookRepository.prepareDemoBook()
             result.fold(
                 onSuccess = { book ->
-                    val saved = runCatching { readingPositionRepository.position.first() }.getOrNull()
+                    appFileLogger.i(
+                        TAG,
+                        "book prepared id=${book.bookId} spine=${book.spineFiles.size}"
+                    )
+                    val saved =
+                        runCatching { readingPositionRepository.position.first() }.getOrNull()
                     val spineIndex = if (saved?.bookId == book.bookId) {
-                        saved.spineIndex.coerceIn(0, book.spineFiles.lastIndex.coerceAtLeast(0))
+                        saved
+                            .spineIndex
+                            .coerceIn(
+                                0,
+                                book.spineFiles.lastIndex.coerceAtLeast(0)
+                            )
                     } else {
                         0
                     }
@@ -70,11 +85,15 @@ class ReaderViewModel(
                     }
                     runCatching {
                         applyReady(book, spineIndex, pending, urlFragment = null)
+                    }.onSuccess {
+                        appFileLogger.i(TAG, "state Ready spineIndex=$spineIndex")
                     }.onFailure { e ->
+                        appFileLogger.e(TAG, "applyReady failed", e)
                         _uiState.value = ReaderUiState.Error(e.toUserMessage())
                     }
                 },
                 onFailure = { e ->
+                    appFileLogger.e(TAG, "prepareDemoBook failed", e)
                     _uiState.value = ReaderUiState.Error(e.toUserMessage())
                 },
             )
@@ -87,8 +106,10 @@ class ReaderViewModel(
         val book = state.book
         runCatching {
             val i = index.coerceIn(0, book.spineFiles.lastIndex.coerceAtLeast(0))
+            appFileLogger.i(TAG, "selectSpine index=$i")
             applyReady(book, i, null, urlFragment = null)
         }.onFailure { e ->
+            appFileLogger.e(TAG, "selectSpine failed", e)
             _uiState.value = ReaderUiState.Error(e.toUserMessage())
         }
     }
@@ -98,10 +119,12 @@ class ReaderViewModel(
         if (state !is ReaderUiState.Ready) return
         val book = state.book
         runCatching {
+            appFileLogger.i(TAG, "selectTocEntry href=${entry.href}")
             val idx = findSpineIndexForHref(book, entry.href)
             val frag = EpubPathResolver.fragmentPart(entry.href)
             applyReady(book, idx, null, urlFragment = frag)
         }.onFailure { e ->
+            appFileLogger.e(TAG, "selectTocEntry failed", e)
             _uiState.value = ReaderUiState.Error(e.toUserMessage())
         }
     }
@@ -129,7 +152,8 @@ class ReaderViewModel(
                             scrollRatio = ratio,
                         ),
                     )
-                }.onFailure {
+                }.onFailure { err ->
+                    appFileLogger.e(TAG, "save position failed", err)
                     _snackbarMessages.tryEmit(application.getString(R.string.error_position_save))
                 }
             }
@@ -168,13 +192,15 @@ class ReaderViewModel(
     }
 
     private fun findSpineIndexForHref(book: PreparedBook, href: String): Int {
-        val targetFile = EpubPathResolver.resolveRelativeToOpf(book.opfDir, book.unpackRoot, href)
+        val targetFile = EpubPathResolver
+            .resolveRelativeToOpf(book.opfDir, book.unpackRoot, href)
         book.spineFiles.forEachIndexed { index, file ->
             if (file.canonicalFile == targetFile) return index
         }
         val normalizedTarget = EpubPathResolver.normalizeForCompare(href)
         book.spineFiles.forEachIndexed { index, file ->
-            val rel = EpubPathResolver.relativePathFromOpf(book.opfDir, file) ?: return@forEachIndexed
+            val rel =
+                EpubPathResolver.relativePathFromOpf(book.opfDir, file) ?: return@forEachIndexed
             if (rel == normalizedTarget) return index
         }
         val targetName = normalizedTarget.substringAfterLast('/')

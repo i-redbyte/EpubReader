@@ -3,6 +3,7 @@ package ru.redbyte.epubreader.di
 import android.app.Application
 import dagger.BindsInstance
 import dagger.Component
+import ru.redbyte.epubreader.logging.AppFileLogger
 import ru.redbyte.epubreader.ui.reader.ReaderViewModelFactory
 import javax.inject.Singleton
 
@@ -14,6 +15,8 @@ import javax.inject.Singleton
     ],
 )
 interface AppComponent {
+
+    fun appFileLogger(): AppFileLogger
 
     fun readerViewModelFactory(): ReaderViewModelFactory
 

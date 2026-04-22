@@ -12,5 +12,9 @@ class EpubReaderApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         appComponent = DaggerAppComponent.factory().create(this)
+        val log = appComponent.appFileLogger()
+        log.installUncaughtExceptionHandler()
+        log.startSession()
+        log.i("Application", "onCreate")
     }
 }

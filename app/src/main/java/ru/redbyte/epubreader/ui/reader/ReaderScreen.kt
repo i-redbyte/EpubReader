@@ -1,8 +1,8 @@
 package ru.redbyte.epubreader.ui.reader
 
-import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -70,7 +70,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.math.abs
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import ru.redbyte.epubreader.EpubReaderApplication
 import ru.redbyte.epubreader.R
+import ru.redbyte.epubreader.logging.AppFileLogger
+import androidx.core.net.toUri
 
 val LocalReaderViewModelFactory = staticCompositionLocalOf<ReaderViewModelFactory> {
     throw IllegalStateException()
@@ -87,6 +90,10 @@ fun ReaderScreen(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val appFileLogger = remember(context.applicationContext) {
+        (context.applicationContext as EpubReaderApplication).appComponent.appFileLogger()
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.snackbarMessages.collectLatest { message ->
@@ -144,6 +151,7 @@ fun ReaderScreen(
                         },
                     )
                 }
+
                 else -> {}
             }
         },
@@ -221,6 +229,7 @@ fun ReaderScreen(
                         }
                     }
                 }
+
                 else -> {}
             }
         },
@@ -237,6 +246,7 @@ fun ReaderScreen(
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
+
                 is ReaderUiState.Error -> {
                     Column(
                         modifier = Modifier
@@ -253,11 +263,13 @@ fun ReaderScreen(
                         }
                     }
                 }
+
                 is ReaderUiState.Ready -> {
                     ReaderWithSwipe(
                         viewModel = viewModel,
                         ready = s,
                         swipeEnabled = swipeNavigationEnabled,
+                        appFileLogger = appFileLogger,
                     )
                 }
             }
@@ -303,12 +315,14 @@ private fun ReaderWithSwipe(
     viewModel: ReaderViewModel,
     ready: ReaderUiState.Ready,
     swipeEnabled: Boolean,
+    appFileLogger: AppFileLogger,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val zoneWidth = (maxWidth * 0.28f).coerceAtLeast(100.dp)
         ReaderWebView(
             viewModel = viewModel,
             ready = ready,
+            appFileLogger = appFileLogger,
         )
         if (swipeEnabled) {
             SwipeEdgeZone(
@@ -373,10 +387,13 @@ private fun SwipeEdgeZone(
     )
 }
 
+private const val string = "WebView"
+
 @Composable
 private fun ReaderWebView(
     viewModel: ReaderViewModel,
     ready: ReaderUiState.Ready,
+    appFileLogger: AppFileLogger,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -410,16 +427,34 @@ private fun ReaderWebView(
     }
 
     LaunchedEffect(ready.spineIndex, ready.fileUrl) {
+        appFileLogger.i(
+            tag = "__ReaderWebView",
+            message = "loadUrl spine=${ready.spineIndex} url=${ready.fileUrl}"
+        )
         webView.loadUrl(ready.fileUrl)
     }
 
-    val client = remember(viewModel) {
+    val client = remember(viewModel, appFileLogger) {
         object : WebViewClient() {
             override fun shouldOverrideUrlLoading(
                 view: WebView?,
                 request: WebResourceRequest?,
             ): Boolean {
                 return false
+            }
+
+            override fun onReceivedError(
+                view: WebView,
+                request: WebResourceRequest?,
+                error: WebResourceError?,
+            ) {
+                super.onReceivedError(view, request, error)
+                if (request?.isForMainFrame == true) {
+                    appFileLogger.w(
+                        "__WebView",
+                        "onReceivedError code=${error?.errorCode} desc=${error?.description}",
+                    )
+                }
             }
 
             override fun onPageFinished(view: WebView, url: String?) {
@@ -432,7 +467,10 @@ private fun ReaderWebView(
                 val delays = longArrayOf(0L, 50L, 200L, 500L, 1000L)
                 val finishedUrl = url ?: view.url
                 for (d in delays) {
-                    view.postDelayed({ view.evaluateJavascript(js, null) }, d)
+                    view.postDelayed(
+                        { view.evaluateJavascript(js, null) },
+                        d
+                    )
                 }
                 view.postDelayed({
                     val st = viewModel.uiState.value
@@ -458,7 +496,7 @@ private fun ReaderWebView(
 
 private fun sameDocumentPath(a: String?, b: String): Boolean {
     if (a == null) return false
-    val pathA = Uri.parse(a.substringBefore("#")).path ?: return false
-    val pathB = Uri.parse(b.substringBefore("#")).path ?: return false
+    val pathA = a.substringBefore("#").toUri().path ?: return false
+    val pathB = b.substringBefore("#").toUri().path ?: return false
     return pathA == pathB
 }

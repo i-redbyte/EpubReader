@@ -1,5 +1,6 @@
 package ru.redbyte.epubreader.ui.reader
 
+import android.annotation.SuppressLint
 import android.graphics.Color
 import android.os.Build
 import android.view.View
@@ -13,6 +14,7 @@ import org.json.JSONObject
  * reflow column and predictable viewport behavior; on emulators we prefer software rendering
  * to avoid compositor glitches.
  */
+@SuppressLint("SetJavaScriptEnabled")
 internal fun WebView.configureForEpubReading() {
     setBackgroundColor(Color.WHITE)
     if (isProbablyEmulator()) {

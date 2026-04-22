@@ -12,6 +12,7 @@ import ru.redbyte.epubreader.di.ApplicationContext
 import ru.redbyte.epubreader.domain.PreparedBook
 import ru.redbyte.epubreader.domain.TocEntry
 import ru.redbyte.epubreader.domain.repository.EpubBookRepository
+import ru.redbyte.epubreader.logging.AppFileLogger
 import ru.redbyte.epubreader.R
 import java.io.File
 import java.io.FileInputStream
@@ -20,9 +21,12 @@ import java.nio.charset.StandardCharsets
 import javax.inject.Inject
 import javax.inject.Singleton
 
+private const val TAG = "__EpubBookRepository"
+
 @Singleton
 class EpubBookRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val appFileLogger: AppFileLogger,
 ) : EpubBookRepository {
 
     private val epubFile: File
@@ -34,7 +38,8 @@ class EpubBookRepositoryImpl @Inject constructor(
     private data class SpineItem(val href: String, val file: File)
 
     override suspend fun prepareDemoBook(): Result<PreparedBook> = withContext(Dispatchers.IO) {
-        runCatching {
+        appFileLogger.i(TAG, "prepareDemoBook started")
+        val result = runCatching {
             copyAssetIfNeeded()
             val containerXml = File(unpackDir, "META-INF/container.xml")
             if (!containerXml.isFile) {
@@ -68,6 +73,19 @@ class EpubBookRepositoryImpl @Inject constructor(
                 tocEntries = tocEntries,
             )
         }
+        result.onSuccess {
+            appFileLogger.i(
+                TAG,
+                message = "prepareDemoBook success bookId=${it.bookId}"
+            )
+        }.onFailure { e ->
+            appFileLogger.e(
+                TAG,
+                message = "prepareDemoBook failed",
+                throwable = e
+            )
+        }
+        result
     }
 
     private fun buildFilteredSpine(book: Book, opfDir: File, unpackDir: File): List<SpineItem> {
@@ -76,14 +94,18 @@ class EpubBookRepositoryImpl @Inject constructor(
         for (ref in raw) {
             val res = ref.resource
             if (!isSpineResourceEligible(res)) continue
-            val file = EpubPathResolver.resolveRelativeToOpf(opfDir, unpackDir, res.href)
+            val file = EpubPathResolver
+                .resolveRelativeToOpf(opfDir, unpackDir, res.href)
             if (!shouldPresentSpineFile(file)) continue
             items.add(SpineItem(res.href, file))
         }
         if (items.isEmpty()) {
             return raw.map { ref ->
                 val res = ref.resource
-                SpineItem(res.href, EpubPathResolver.resolveRelativeToOpf(opfDir, unpackDir, res.href))
+                SpineItem(
+                    res.href, EpubPathResolver
+                        .resolveRelativeToOpf(opfDir, unpackDir, res.href)
+                )
             }
         }
         return items
@@ -110,13 +132,20 @@ class EpubBookRepositoryImpl @Inject constructor(
             if (n <= 0) return false
             String(buf, 0, n, StandardCharsets.UTF_8)
         }
-        val body = Regex("<body[^>]*>([\\s\\S]*)</body>", RegexOption.IGNORE_CASE).find(text)?.groupValues?.get(1)
-        if (body == null) {
-            return text.length > 80
-        }
+        val body = Regex(
+            "<body[^>]*>([\\s\\S]*)</body>",
+            RegexOption.IGNORE_CASE
+        )
+            .find(text)
+            ?.groupValues
+            ?.get(1)
+            ?: return text.length > 80
         val lower = body.lowercase()
-        if (lower.contains("<img") || lower.contains("<svg") || lower.contains("<video") ||
-            lower.contains("<audio") || lower.contains("<object")
+        if (lower.contains("<img")
+            || lower.contains("<svg")
+            || lower.contains("<video")
+            || lower.contains("<audio")
+            || lower.contains("<object")
         ) {
             return true
         }

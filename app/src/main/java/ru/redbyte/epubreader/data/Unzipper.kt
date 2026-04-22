@@ -22,8 +22,9 @@ object Unzipper {
                         val parent = outFile.parentFile ?: destDir
                         parent.mkdirs()
                         val canonicalOut = outFile.canonicalFile
-                        if (!canonicalOut.path.startsWith(canonicalDest.path + File.separator) &&
-                            canonicalOut.path != canonicalDest.path
+                        if (!canonicalOut.path
+                            .startsWith(canonicalDest.path + File.separator)
+                            && canonicalOut.path != canonicalDest.path
                         ) {
                             throw SecurityException("Zip path traversal: ${entry.name}")
                         }
